@@ -6,7 +6,7 @@ but not across restarts.
 """
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import Lock
 from typing import Any
 from uuid import uuid4
@@ -21,6 +21,13 @@ class AgentContext:
     subtask_decomposition: list = field(default_factory=list)
     short_term_refs: dict = field(default_factory=dict)
     last_updated: datetime = field(default_factory=datetime.utcnow)
+
+
+@dataclass
+class CacheEntry:
+    """Cache entry with TTL."""
+    value: Any
+    expires_at: datetime
 
 
 class WorkingMemory:
@@ -164,3 +171,111 @@ class WorkingMemory:
         """Get number of registered agents."""
         with self._lock:
             return len(self._store)
+
+    # Cache layer for executor - key-value with TTL
+    _cache: dict[str, CacheEntry] = {}
+
+    def get(self, prefix: str, key: str) -> Any | None:  # noqa: F811
+        """Get cached value - executor interface.
+        
+        Args:
+            prefix: Cache namespace (e.g., "system", "task")
+            key: Cache key
+            
+        Returns:
+            Cached value or None if expired/missing
+        """
+        return self.cache_get(prefix, key)
+
+    def set(self, prefix: str, key: str, value: Any, ttl_seconds: int | None = None) -> None:  # noqa: F811
+        """Set cached value - executor interface.
+        
+        Args:
+            prefix: Cache namespace (e.g., "system", "task")
+            key: Cache key
+            value: Value to cache
+            ttl_seconds: TTL in seconds (default: self._ttl_seconds)
+        """
+        self.cache_set(prefix, key, value, ttl_seconds)
+
+    def cache_get(self, prefix: str, key: str) -> Any | None:
+        """Get cached value by prefix + key.
+        
+        Args:
+            prefix: Cache namespace (e.g., "system", "task")
+            key: Cache key
+            
+        Returns:
+            Cached value or None if expired/missing
+        """
+        cache_key = f"{prefix}:{key}"
+        with self._lock:
+            entry = self._cache.get(cache_key)
+            if entry is None:
+                return None
+            if entry.expires_at < datetime.utcnow():
+                del self._cache[cache_key]
+                return None
+            return entry.value
+
+    def cache_set(self, prefix: str, key: str, value: Any, ttl_seconds: int | None = None) -> None:
+        """Set cached value with TTL.
+        
+        Args:
+            prefix: Cache namespace (e.g., "system", "task")
+            key: Cache key
+            value: Value to cache
+            ttl_seconds: TTL in seconds (default: self._ttl_seconds)
+        """
+        cache_key = f"{prefix}:{key}"
+        ttl = ttl_seconds or self._ttl_seconds
+        expires_at = datetime.utcnow() + timedelta(seconds=ttl)
+        
+        with self._lock:
+            self._cache[cache_key] = CacheEntry(value=value, expires_at=expires_at)
+
+    def cache_delete(self, prefix: str, key: str) -> bool:
+        """Delete cached value.
+        
+        Args:
+            prefix: Cache namespace
+            key: Cache key
+            
+        Returns:
+            True if deleted, False if not found
+        """
+        cache_key = f"{prefix}:{key}"
+        with self._lock:
+            if cache_key in self._cache:
+                del self._cache[cache_key]
+                return True
+            return False
+
+    def cache_clear_prefix(self, prefix: str) -> int:
+        """Clear all cached values for a prefix.
+        
+        Args:
+            prefix: Cache namespace to clear
+            
+        Returns:
+            Number of entries cleared
+        """
+        cleared = 0
+        with self._lock:
+            to_delete = [k for k in self._cache if k.startswith(f"{prefix}:")]
+            for k in to_delete:
+                del self._cache[k]
+                cleared += 1
+        return cleared
+
+
+# Singleton instance for get_working_memory()
+_working_memory_instance: WorkingMemory | None = None
+
+
+def get_working_memory() -> WorkingMemory:
+    """Get singleton WorkingMemory instance."""
+    global _working_memory_instance
+    if _working_memory_instance is None:
+        _working_memory_instance = WorkingMemory()
+    return _working_memory_instance

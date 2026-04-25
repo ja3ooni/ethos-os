@@ -1,143 +1,214 @@
-# EthosOS
+# EthosOS v0.2 — Initiative-Based AI Company OS
 
-**An initiative-based operating system for human-agent organizations.**
+**Paperclip meets PMO. Agents execute initiatives. Humans govern at gates.**
 
-Stop managing tickets. Start leading initiatives.
+EthosOS is an orchestration platform where AI agents (from agency-agents) run a company based on business initiatives. Board (humans) approves direction, agents execute autonomously.
 
 ---
 
-## The Problem
+## What Paperclip Does
 
-Ticket-based systems are built for IT problem tracking. They create a culture of "file a ticket" — tasks without context, status theater instead of outcomes, and work that exists in isolation from strategy.
+| Feature | What It Is |
+|---------|-----------|
+| **Org Chart** | Agents have roles, titles, reporting lines |
+| **Heartbeats** | Agents wake on schedule, check work, execute |
+| **Task System** | Every task traces to company goal |
+| **Budgets** | Cost control per agent, hard stops |
+| **Governance** | Board approval, pause/terminate agents |
+| **Multi-Company** | One deployment, many companies |
 
-When a company launches a SaaS product, that's a project. When it hires a founding engineer, that's a project. When it builds the product, sprints and backlog come from the PRD — not from tickets floating in from nowhere.
+---
 
-**The hierarchy should mirror how companies actually run, not how IT helpdesks operate.**
+## What EthosOS Does Differently
 
-## The Solution
+| Aspect | Paperclip | EthosOS |
+|--------|-----------|---------|
+| **Work primitive** | Ticket | Initiative (Portfolio→Project→Sprint→Task) |
+| **PM model** | Task-based | PMO-style (no orphan tasks) |
+| **Agent source** | Claude Code, OpenClaw, etc. | 147+ agents from agency-agents |
+| **Gate system** | Budget hard-stops | Full approval gates (PRD, scope, budget, launch) |
+| **Context** | Project context | Initiative hierarchy + vector memory |
 
-EthosOS is project-first, PMO-style. Everything traces upward from a board-approved PRD.
+---
 
-```
-Company (Portfolio)
-  └── Product (Program)
-        └── SaaS Launch (Project + PRD)
-              └── Sprint 1
-                    └── Backlog (from PRD, not tickets)
-                          └── Task → Subtask
-```
+## EthosOS Architecture
 
-No orphan tickets. No "create a ticket" as primitive. Every task derives from a board-approved scope.
-
-## Key Concepts
-
-### Board-Approved PRD
-
-Before a project has sprints, it has a PRD. The board reviews scope. Scope gets approved. Then sprints happen. This mirrors real PMO intake — no sprints without board-approved scope.
-
-## Key Concepts
-
-### Initiative Hierarchy
-
-Purpose flows down, context flows up. A portfolio contains programs. A program contains projects. A project contains workstreams. Each level is a container for the next, with clear ownership and approval gates.
-
-### Approval Gates
-
-Human judgment is expensive. Make it deliberate. Gates are explicit checkpoints where human sign-off is required before work continues. Agents can execute freely between gates. No surprises, no runaway autonomy.
-
-### Heartbeat Execution
-
-Agents don't wait to be assigned. They run on a heartbeat — a loop that pulls from the current sprint, executes what's ready, and reports back. Humans don't micromanage. They review. They approve. They course-correct.
-
-### Memory Layers
-
-Five layers, each with a purpose. Vector-first for token efficiency:
-
-| Layer | Purpose | Storage |
-|---|---|---|
-| **Semantic** | Long-term memory, big context | Vector store (Qdrant) |
-| **Procedural** | How things get done | Vector-backed templates |
-| **Episodic** | What happened and when | Append-only log |
-| **Structured** | Entities, state, approvals | SQLite/PostgreSQL |
-| **Working** | Current sprint, runtime | In-memory |
-
-PRD chunks, architecture docs, meeting notes go into vector store — they never hit context limits. Exact state (gate status, sprint data) stays in SQLite.
-
-## Architecture
-
-EthosOS is built as a lightweight, open-source core with a minimal dependency footprint. The system organizes work through the initiative hierarchy, routes execution through agent heartbeats, and enforces governance through approval gates. Memory layers operate independently but share a common query interface.
+### Entity Hierarchy
 
 ```
-src/
-  core/           Initiative tree, hierarchy management, gate logic
-  memory/         Five-layer memory system
-  heartbeat/      Agent execution loop, task dispatch
-  storage/        Persistent state, structured + episodic
-  vector/         Semantic search layer (semantic memory only)
-  api/            Control plane for humans and agents
+Portfolio (Company)
+├── Program (Business Unit)
+│   ├── Project (Initiative)
+│   │   ├── PRD (Board-approved scope)
+│   │   ├── Sprint (Time box)
+│   │   │   ├── Task (Work item)
+│   │   │   └── Task → Agent assignment
+│   └── Gate (Approval checkpoint)
 ```
 
-## Getting Started
+### Agent Hierarchy (from agency-agents)
 
-### Prerequisites
-
-- Python 3.11+
-- [uv](https://github.com/astral-sh/uv) (package manager)
-
-### Local Development
-
-```bash
-# Install dependencies
-uv sync
-
-# Copy environment config
-cp .env.example .env
-
-# Run migrations
-alembic upgrade head
-
-# Seed sample data (optional)
-python seed.py
-
-# Start the server
-python -m ethos_os.main
+```
+Board (Humans) ← Approves PRDs, gates
+    ↑
+CEO Agent (@chief-of-staff) ← Strategic planning
+    ↓
+Project Leads (@project-shepherd, @sprint-prioritizer)
+    ↓
+Execution Agents (specialized per task)
+    ├── @senior-developer → coding tasks
+    ├── @content-creator → content tasks
+    ├── @sales-outreach → outreach tasks
+    ├── @researcher → research tasks
+    └── ... (any from 147+ agents)
 ```
 
-The API will be available at `http://localhost:8000`. OpenAPI docs at `http://localhost:8000/docs`.
+### Workflow
 
-### Docker
+| Step | Actor | Action |
+|------|-------|--------|
+| 1 | Board (Human) | Sets strategic direction |
+| 2 | CEO Agent (@chief-of-staff) | Creates Program/Project from directive |
+| 3 | Board (Human) | **PRD Gate** — Approves scope |
+| 4 | Project Lead Agent | Breaks into sprints, assigns tasks |
+| 5 | Execution Agents | Execute autonomously |
+| 6 | **Scope Gate** | Triggers at +25% estimate variance |
+| 7 | **Launch Gate** | Board approves completion |
 
-```bash
-# Using Docker Compose
-docker-compose up --build
-```
+---
 
-### Running Tests
+## Agent Integration
 
-```bash
-pytest
-```
+### Available Agents (from agency-agents)
 
-### Code Quality
+| Role | Agent | Use Case |
+|------|-------|----------|
+| **Leadership** | @chief-of-staff, @product-manager | Strategic planning, roadmapping |
+| **Execution (Dev)** | @senior-developer, @backend-architect, @frontend-developer | Building features, APIs |
+| **Execution (Content)** | @content-creator, @linkedin-content-creator, @twitter-engager | Marketing, docs, social |
+| **Execution (Sales)** | @sales-outreach, @outbound-strategist, @discovery-coach | Lead gen, BD, sales |
+| **Execution (Research)** | @trend-researcher, @growth-hacker, @analytics-reporter | Market research, analysis |
+| **Operations** | @project-shepherd, @sprint-prioritizer, @hr-onboarding | Project management, ops |
+| **Governance** | @security-engineer, @compliance-auditor | Security, compliance |
+| **Support** | @customer-service, @support-responder | Customer support |
+| **Specialized** | 130+ more | Industry-specific tasks |
 
-```bash
-# Lint
-ruff check ethos_os tests
+### Agent Registration
 
-# Format
-ruff format ethos_os tests
-```
+Each agent from agency-agents can be "hired" into EthosOS:
+1. Board reviews agent capabilities
+2. Board assigns agent to role/team
+3. Agent receives heartbeats and executes tasks
+4. Board monitors via dashboard, approves at gates
 
-## Ontology
+---
 
-All terminology, principles, and entity definitions live in [`docs/ONTOLOGY.md`](./docs/ONTOLOGY.md). This is the single source of truth — all design decisions and code artifacts trace back to it.
+## Key Features
 
-Watch this space — or better yet, help build it.
+### 1. Initiative Hierarchy (PMO-style)
+- Every task traces to board-approved PRD
+- No orphan tickets
+- Clear ownership at each level
 
-## Contributing
+### 2. AI Agent Workforce
+- CEO Agent orchestrates from agency-agents
+- Specialized execution agents per task type
+- Agents work autonomously between gates
 
-Roadmap and contribution guidelines live in [`plans/`](./plans/). If you're interested in shaping what this becomes, that's where to look.
+### 3. Approval Gates
+- **PRD Gate** — Board approves project scope
+- **Scope Gate** — Triggers at +25% effort variance
+- **Budget Gate** — Triggers at +20% cost variance
+- **Launch Gate** — Board approves completion
 
-## License
+### 4. Heartbeat Execution
+- Agents check in every 30s
+- Report progress, status, blockers
+- Resume work from checkpoint
 
-MIT
+### 5. Persistent Memory
+- **Vector (Qdrant)** — Initiative docs, meeting notes, context
+- **SQLite** — Entity state, approvals, audit log
+- **Working** — Current sprint runtime
+
+### 6. Chat Interface
+- Talk to CEO Agent to set direction
+- Chat with any agent about their work
+- Real-time updates on execution
+
+### 7. Dashboard
+- Initiative tree view
+- Agent status panel
+- Gate approval board
+- Budget tracking
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| **Backend** | FastAPI (existing) + expand |
+| **Database** | SQLite (existing) + PostgreSQL ready |
+| **Vector** | Qdrant (scaffolded) |
+| **Frontend** | React/Next.js (new) |
+| **AI** | OpenAI/Anthropic (new) |
+| **Agents** | agency-agents (existing) |
+| **Orchestration** | Paperclip-style (new) |
+
+---
+
+## Roadmap to v0.2
+
+### Phase A: Agent Integration
+- [ ] Import agents from agency-agents
+- [ ] Agent registry in EthosOS
+- [ ] Agent ↔ Initiative linking
+
+### Phase B: Heartbeat & Execution
+- [ ] Agent heartbeat loop
+- [ ] Task assignment to agents
+- [ ] Progress reporting
+
+### Phase C: Chat UI
+- [ ] Paperclip-style chat interface
+- [ ] Agent switching
+- [ ] Initiative context in chat
+
+### Phase D: Memory & Context
+- [ ] Qdrant integration
+- [ ] Initiative document chunking
+- [ ] Context injection to agents
+
+### Phase E: Dashboard
+- [ ] Initiative tree
+- [ ] Agent status
+- [ ] Gate approvals
+
+---
+
+## Comparison
+
+| Feature | Current v0.1 | v0.2 Target |
+|---------|-------------|-------------|
+| Initiative hierarchy | ✅ | ✅ |
+| Approval gates | ✅ | ✅ |
+| Heartbeat framework | ✅ | ✅ |
+| AI agents | ❌ | ✅ |
+| Chat UI | ❌ | ✅ |
+| Agent orchestration | ❌ | ✅ |
+| Vector memory | Scaffolded | ✅ |
+| Dashboard | API routes only | Full UI |
+
+---
+
+## Philosophy
+
+**Paperclip:** "If it can receive a heartbeat, it's hired."
+
+**EthosOS:** "Every task traces to a board-approved initiative. Agents execute autonomously between gates. Humans govern at boundaries."
+
+---
+
+*EthosOS: Initiative-first AI company orchestration.*
+*Built on agency-agents. Governed by humans.*

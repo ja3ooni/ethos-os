@@ -1,9 +1,10 @@
-# Roadmap: EthosOS
+# Roadmap: EthosOS v0.2
 
-**Phases:** 7
-**Requirements:** 37 mapped | **Plans:** 28 total
+**Phases:** 6
+**Requirements:** 27 new | **Plans:** 24 total
 **Granularity:** Fine
-**Created:** 2026-04-24
+**Created:** 2026-04-25
+**Base:** v0.1 (7 phases complete)
 
 ---
 
@@ -11,351 +12,279 @@
 
 | # | Phase | Goal | Requirements | Success Criteria |
 |---|-------|------|--------------|------------------|
-| 1 | Domain Models | Core initiative hierarchy and data layer | HIER-01–12, MEM-01, PERS-01–03 | 5 |
-| 2 | Structured Memory + Gates | Persistent storage and approval workflow | GATE-01–08, MEM-02–06 | 6 |
-| 3 | Heartbeat Execution | Agent runtime with gate-aware execution | BEAT-01–07 | 4 |
-| 4 | API Layer | REST APIs for all core operations | API-01–05 | 3 |
-| 5 | Dashboard | Read-only UI for hierarchy, gates, heartbeats | DASH-01–04 | 3 |
-| 6 | Testing + Validation | Integration tests and requirement verification | All | 4 |
-| 7 | Polish + Documentation | Open-source prep, README, contributor guide | All | 3 |
+| 1 | Agent Registry | Import agents from agency-agents, complete registry | AGENT-01–07 | 4 |
+| 2 | Agent Orchestration | Heartbeat-based task routing, CEO Agent integration | ORCH-01–06 | 4 |
+| 3 | Chat UI | Paperclip-style interface, initiative context | CHAT-01–06 | 4 |
+| 4 | Vector Memory | Qdrant integration, context injection pipeline | MEM-01–06 | 4 |
+| 5 | Dashboard | Agent status overlay, gate board enhancement | DASH-01–04 | 3 |
+| 6 | Integration + Testing | API endpoints, WebSocket, end-to-end tests | INT-01–04 | 4 |
 
 ---
 
-## Phase 1: Domain Models
+## Phase 1: Agent Registry
 
-**Goal:** Core initiative hierarchy with initiative roots, SQLite persistence, working memory.
+**Goal:** Complete agent registry with agency-agents import and token-efficient architecture.
 
 ### Requirements
-HIER-01, HIER-02, HIER-03, HIER-04, HIER-05, HIER-06, HIER-07, HIER-08, HIER-09, HIER-10, HIER-11, HIER-12, MEM-01, PERS-01, PERS-02, PERS-03
+AGENT-01, AGENT-02, AGENT-03, AGENT-04, AGENT-05, AGENT-06, AGENT-07
 
 ### Plans
 
-**Plan 1.1 — Project scaffolding**
-- Initialize Python project (pyproject.toml, uv or poetry)
-- Set up src/ directory structure (domain/, memory/, execution/, governance/, infrastructure/)
-- Configure SQLite with SQLAlchemy
-- Add Alembic for migrations
-- Add basic config loader (YAML + env vars)
+**Plan 1.1 — Complete agent registry schema**
+- Verify existing Agent model covers all fields
+- Add indexes for role, division, capabilities
+- Add hiring info fields (is_hired, hired_at, salary, budget)
+- Write tests for summary vs full config retrieval
 
-**Plan 1.2 — Initiative hierarchy models**
-- Implement Portfolio, Program, Project models
-- Project model includes initiative_root (intent + success_metric + boundaries)
-- Implement Workstream, Sprint, Backlog models
-- Implement Task, Subtask models
-- Add initiative lineage field to every work item (computed, inherited from parent)
-- Enforce initiative root requirement at model level (not just API)
+**Plan 1.2 — Import from agency-agents**
+- Parse YAML frontmatter only (NOT full prompts)
+- Extract: name, description, color
+- Infer: role from name patterns, division from path
+- Extract capabilities from description keywords
+- Truncate summary to 200 chars max
+- Write import script with progress tracking
+- Target: 147+ agents imported
 
-**Plan 1.3 — Hierarchy CRUD**
-- SQLAlchemy sessions and repository pattern
-- Create, read, update, list operations for all hierarchy levels
-- Initiative tree query (portfolio → subtask traversal)
-- Lineage query per work item
-- Search by name, owner, status
+**Plan 1.3 — Token-efficient query methods**
+- `list_for_task()`: returns summary only, configurable filters
+- `get_for_execution()`: returns full config including prompt_reference
+- `search_by_capability()`: SQLite text search on summary
+- Verify no full prompts leak in listings
 
-**Plan 1.4 — Working memory**
-- Per-agent in-memory context store (dict-like, thread-safe)
-- Working memory is runtime-only (not persisted across restarts)
-- Context: current task, reasoning state, subtask decomposition, short-term references
-
-**Plan 1.5 — Migration and seed**
-- Alembic migration for initial schema
-- Seed script with example portfolio/program/project
-- Verify hierarchy integrity with tests
+**Plan 1.4 — Agent lifecycle**
+- Hire agent: from agency-agents into company
+- Fire agent: terminate employment
+- Update budget, role, division
+- Usage tracking: last_used_at
 
 ### Success Criteria
-1. `portfolio → subtask` traversal returns complete lineage
-2. Creating a task without initiative root raises validation error
-3. SQLite stores all hierarchy levels with correct relationships
-4. Working memory stores and returns per-agent runtime context
-5. Alembic migration runs cleanly on fresh database
+1. 147+ agents imported from agency-agents (summary only)
+2. `list_for_task()` returns summaries without full prompts
+3. `get_for_execution()` returns full config for execution
+4. Agent hiring/firing lifecycle functional
 
 ---
 
-## Phase 2: Structured Memory + Gates
+## Phase 2: Agent Orchestration
 
-**Goal:** Approval gate system with immutable audit log, full structured memory.
+**Goal:** Heartbeat-based task assignment with CEO Agent integration.
 
 ### Requirements
-GATE-01, GATE-02, GATE-03, GATE-04, GATE-05, GATE-06, GATE-07, GATE-08, MEM-02, MEM-03, MEM-04, MEM-05, MEM-06
+ORCH-01, ORCH-02, ORCH-03, ORCH-04, ORCH-05, ORCH-06
 
 ### Plans
 
-**Plan 2.1 — Approval gate models**
-- GateRequest model: gate_type, entity_id, entity_type, status, trigger_condition, approver, notes, created_at, decided_at, decided_by
-- Gate states: pending, approved, rejected
-- Scope gate: triggered when task effort > original_estimate * 1.25
-- Budget gate: triggered when actual_cost > estimated_cost * 1.20
-- Gate is binary (approved or rejected, no partial)
+**Plan 2.1 — Task → Agent routing**
+- Match task requirements to agent capabilities
+- Consider: role (ceo/lead/execution), division, specialization
+- Avoid: token-heavy context injection
+- Route to cheapest capable agent first
 
-**Plan 2.2 — Gate workflow**
-- Auto-create scope gate request when threshold exceeded
-- Auto-create budget gate request when threshold exceeded
-- Gate blocking: task cannot proceed while pending
-- Approver can approve or reject with notes
-- Rejected task blocked until re-planned
-- Configurable timeout (scope: 48h, budget: 24h)
+**Plan 2.2 — Heartbeat task loop**
+- Per heartbeat: check for assigned tasks
+- Check gate status before execution
+- Update working memory with current task
+- Write episodic log entry
+- Return execution result
 
-**Plan 2.3 — Immutable audit log**
-- Episodic event log (append-only)
-- Records: heartbeat, gate decision, cost snapshot, scope/budget change
-- Hash-chain integrity: each record includes hash of previous record
-- No edit or delete operations
-- Query by time range, entity, event type
+**Plan 2.3 — CEO Agent integration**
+- Locate @chief-of-staff agent in agency-agents
+- Integrate as strategic planning agent
+- CEO Agent creates Programs from board directives
+- CEO Agent creates Projects from approved programs
+- CEO Agent proposes PRDs for board approval
 
-**Plan 2.4 — Structured memory interface**
-- Repository pattern for all persistent entities
-- Exact key lookup (not similarity) for operational state
-- Audit log as separate read model
-- Clear separation: SQLite = authoritative state, episodic log = audit trail
-
-**Plan 2.5 — Gate dashboard data**
-- Pending gates query (ordered by age)
-- Gate approval rate (for monitoring — flag 100% rate as theater)
-- Gate decision time tracking
-- Gate API endpoints (create, approve, reject, list)
-
-**Plan 2.6 — Gate integration tests**
-- Scope gate triggers at +25% threshold
-- Budget gate triggers at +20% threshold
-- Rejected gate blocks task
-- Approved gate unblocks task
-- Audit log integrity (hash chain)
+**Plan 2.4 — Failure handling**
+- Detect missed heartbeats (configurable threshold)
+- Trigger task reassignment
+- Notify human overseer
+- Log reassignment event
 
 ### Success Criteria
-1. Scope gate auto-created at +25% estimate variance
-2. Budget gate auto-created at +20% cost variance
-3. Rejected task remains blocked
-4. Audit log is append-only (no updates or deletes)
-5. Hash-chain integrity maintained across records
-6. Pending gates queryable by age and type
+1. Tasks route to capable agents based on capability matching
+2. Heartbeat loop includes task assignment check
+3. CEO Agent can create Programs/Projects
+4. Failed agent triggers task reassignment
 
 ---
 
-## Phase 3: Heartbeat Execution
+## Phase 3: Chat UI
 
-**Goal:** Agent heartbeat loop with gate-aware execution.
+**Goal:** Paperclip-style chat interface for natural agent interaction.
 
 ### Requirements
-BEAT-01, BEAT-02, BEAT-03, BEAT-04, BEAT-05, BEAT-06, BEAT-07
+CHAT-01, CHAT-02, CHAT-03, CHAT-04, CHAT-05, CHAT-06
 
 ### Plans
 
-**Plan 3.1 — Heartbeat scheduler**
-- asyncio-based heartbeat scheduler
-- Configurable interval per agent (default: 30s, min: 10s)
-- Heartbeat record: timestamp, agent_id, status, task_id, progress_note
-- Status enum: idle, working, blocked, complete
-- Status variance required (don't log idle repeatedly)
+**Plan 3.1 — React chat component**
+- Single input field, conversation history
+- Agent avatar and name per message
+- Initiative context shown in sidebar
+- Message types: user, agent, system
+- Loading states for agent response
 
-**Plan 3.2 — Agent executor loop**
-- Per heartbeat: check assigned tasks → check gate status → execute eligible → update working memory → write episodic log → report
-- Gate-aware: cannot execute gated work (blocked by pending gate)
-- Working memory update per execution cycle
-- Episodic log write per heartbeat
+**Plan 3.2 — Initiative context injection**
+- Selected initiative available in chat
+- Inject initiative summary (not full PRD)
+- Chunk references for deep dive
+- Context updates on initiative selection change
 
-**Plan 3.3 — Agent failure handling**
-- Lease-not-lock: missed heartbeats trigger work reassignment
-- Configurable missed heartbeat threshold (default: 3)
-- Dead agent detection and alerting
-- Reassignment workflow: find agent with capacity, assign task, notify
+**Plan 3.3 — Agent switching**
+- Dropdown to select active agent
+- CEO Agent for strategic queries
+- Project Lead for project questions
+- Execution Agents for task-specific help
+- Clear conversation on agent switch
 
-**Plan 3.4 — Heartbeat API**
-- Agent registration endpoint
-- Heartbeat recording endpoint
-- Heartbeat retrieval endpoint (timeline per agent)
-- Agent status query (idle/working/blocked/complete)
-
-**Plan 3.5 — Heartbeat integration tests**
-- Heartbeat recorded on correct interval
-- Agent status transitions (idle → working → complete)
-- Gate blocks execution when pending
-- Missed heartbeats trigger reassignment
-- Heartbeat record appears in episodic log
+**Plan 3.4 — Conversation persistence**
+- SQLite storage for messages
+- Link conversation to initiative
+- Conversation history per initiative
+- Search within conversations
 
 ### Success Criteria
-1. Heartbeat recorded every 30s (default interval)
-2. Status transitions logged correctly (idle → working → blocked → complete)
-3. Gated work blocked until gate approved
-4. Missing 3 consecutive heartbeats triggers reassignment
-5. Heartbeat timeline queryable per agent
-6. Heartbeat record written to episodic log
+1. Chat UI renders and accepts input
+2. Agent responses appear with agent attribution
+3. Initiative context injected in messages
+4. Conversation history persisted
 
 ---
 
-## Phase 4: API Layer
+## Phase 4: Vector Memory
 
-**Goal:** REST APIs for all core operations, OpenAPI docs.
+**Goal:** Qdrant integration for semantic search and context injection.
 
 ### Requirements
-API-01, API-02, API-03, API-04, API-05
+MEM-01, MEM-02, MEM-03, MEM-04, MEM-05, MEM-06
 
 ### Plans
 
-**Plan 4.1 — Initiative hierarchy API**
-- CRUD endpoints for portfolio, program, project, workstream, sprint, backlog, task, subtask
-- Tree view endpoint (full initiative hierarchy)
-- Lineage query per work item
-- Search endpoints (name, owner, status)
-- Request/response validation with Pydantic
+**Plan 4.1 — Qdrant setup**
+- Docker Compose Qdrant container
+- Collection schema for initiative chunks
+- Embedding model selection (open-source)
+- Async client integration
 
-**Plan 4.2 — Gate API**
-- Create gate request (manual or auto-triggered)
-- Approve gate request
-- Reject gate request
-- List pending gates (with filter options)
-- Gate history per entity
+**Plan 4.2 — Initiative chunking**
+- PRD chunking: intent, success_metric, scope, boundaries
+- Architecture doc chunking: sections
+- Meeting notes chunking: key decisions
+- Chunk size target: 512 tokens
+- Metadata: initiative_id, chunk_type, created_at
 
-**Plan 4.3 — Agent and heartbeat API**
-- Register agent
-- Record heartbeat
-- Get heartbeat timeline
-- Get agent status
+**Plan 4.3 — Context injection pipeline**
+- Qdrant semantic search → relevant chunks
+- Chunks → working memory (with TTL)
+- Working memory → agent prompt (as references)
+- Avoid full context injection (token limit)
 
-**Plan 4.4 — OpenAPI documentation**
-- FastAPI auto-generated OpenAPI (already included)
-- Add descriptive summaries to all endpoints
-- Add example requests/responses
-- Publish at /docs
+**Plan 4.4 — Cache management**
+- Working memory TTL: 3600s default
+- Cache invalidation on initiative update
+- Background prune of inactive agents
+- Memory usage monitoring
 
 ### Success Criteria
-1. All initiative hierarchy CRUD operations work via REST
-2. Gate workflow fully operable via API
-3. Heartbeat recording and retrieval via API
-4. OpenAPI docs accessible at /docs
-5. Pydantic validation rejects invalid requests
+1. Qdrant collection created with initiative chunks
+2. Semantic search returns relevant chunks
+3. Context injected as references (not full content)
+4. Working memory respects TTL
 
 ---
 
 ## Phase 5: Dashboard
 
-**Goal:** Read-only UI for initiative tree, gate status, heartbeat timeline.
+**Goal:** Initiative tree with agent status, enhanced gate board.
 
 ### Requirements
 DASH-01, DASH-02, DASH-03, DASH-04
 
 ### Plans
 
-**Plan 5.1 — Initiative tree view**
-- Nested tree display (portfolio → program → project → workstream → sprint → backlog → task → subtask)
-- Expand/collapse at each level
-- Click node → shows initiative root, approval state, metrics
-- Color coding by status
+**Plan 5.1 — Agent status overlay**
+- Initiative tree nodes show assigned agent
+- Color coding: idle (gray), working (green), blocked (red)
+- Click agent → agent detail panel
+- Filter by agent status
 
-**Plan 5.2 — Gate status board**
-- List of pending gate requests
-- Columns: type, entity, age, approver, status
-- Age highlighting (approaching timeout)
-- Approve/reject actions inline
-- Gate theater detection (100% approval rate warning)
+**Plan 5.2 — Agent status panel**
+- List all active agents
+- Current task and progress
+- Last heartbeat timestamp
+- Heartbeat status indicator
+- Cost tracking (calls, tokens)
 
-**Plan 5.3 — Heartbeat timeline**
-- Per-agent timeline view
-- Chronological heartbeat records
-- Status color coding
-- Filter by agent, status, date range
-- Progress notes visible per heartbeat
+**Plan 5.3 — Gate board enhancement**
+- Pending gates show assigned agents
+- Agent workload visualization
+- Gate aging with agent context
+- Quick actions: reassign agent
 
-**Plan 5.4 — Basic search**
-- Search bar: name, owner, status
-- Filter by initiative level
-- Filter by approval status
+**Plan 5.4 — Agent metrics**
+- Tasks completed per agent
+- Average response time
+- Cost per agent
+- Success rate (tasks completed vs blocked)
 
 ### Success Criteria
-1. Initiative tree renders complete hierarchy
-2. Gate board shows pending gates with age and type
-3. Heartbeat timeline shows chronological records per agent
-4. Search returns relevant results
-5. UI is read-only (no direct data modification)
+1. Initiative tree shows agent status per node
+2. Agent panel lists all agents with current status
+3. Gate board shows agent assignments
+4. Basic metrics displayed
 
 ---
 
-## Phase 6: Testing + Validation
+## Phase 6: Integration + Testing
 
-**Goal:** Integration tests, requirement verification, codebase integrity.
+**Goal:** Token-efficient multi-provider LLM integration
 
-### Plans
-
-**Plan 6.1 — Unit tests**
-- Domain model tests (hierarchy creation, initiative root, lineage)
-- Gate workflow tests (trigger, approve, reject, block)
-- Heartbeat tests (interval, status transitions, failure detection)
-- Memory tests (working, structured, episodic)
-
-**Plan 6.2 — Integration tests**
-- Full API integration tests (all endpoints)
-- SQLite integration (migrations, queries, transactions)
-- Episodic log integration (append-only, hash chain)
-- Dashboard data integration
-
-**Plan 6.3 — Requirement verification**
-- Verify each REQ-ID has passing test
-- Verify requirement traceability is complete
-- Check 100% coverage on core models and workflows
-- Verify anti-patterns are NOT present in implementation
-
-**Plan 6.4 — Performance baseline**
-- Heartbeat throughput (target: 1000 agents at 30s interval)
-- Hierarchy query latency (tree traversal)
-- Gate lookup latency
-- SQLite query benchmarks
-
-### Success Criteria
-1. All REQ-IDs have corresponding tests
-2. 100% coverage on domain models
-3. Integration tests pass against SQLite
-4. Episodic log hash chain verifies correctly
-5. Performance baseline documented
-
----
-
-## Phase 7: Polish + Documentation
-
-**Goal:** Open-source prep, README, contributor guide, packaging.
+### Requirements
+INT-01, INT-02, INT-03, INT-04 ✅ (COMPLETE)
 
 ### Plans
 
-**Plan 7.1 — Open-source documentation**
-- Update README.md with current architecture and getting started
-- Add CONTRIBUTING.md
-- Add docs/ folder with architecture, ontology, API reference
-- Add license (MIT)
+**Plan 6.1 — LLM Provider Abstraction** ✅
+- Base provider interface with completion/embedding methods
+- Token-efficient: provider-agnostic, streaming, caching
+- Registry for provider management
 
-**Plan 7.2 — Packaging**
-- Docker Compose for local development
-- pyproject.toml with proper metadata
-- uv or poetry for dependency management
-- GitHub Actions CI (lint, test, typecheck)
+**Plan 6.2 — Ollama Integration** ✅
+- Local LLM (Llama3, Mistral) - primary for v0.2
+- No API cost, privacy-focused
+- Default: http://localhost:11434
 
-**Plan 7.3 — Contributor guide**
-- Architecture overview (from ARCHITECTURE.md)
-- Domain model conventions
-- Test conventions
-- How to add a new initiative level
-- How to add a new gate type
+**Plan 6.3 — OpenAI + Anthropic + Azure** ✅
+- OpenAI: GPT-4, GPT-4o, GPT-3.5-turbo
+- Anthropic: Claude 3.5 Sonnet, Claude 3 Opus
+- Azure: Enterprise OpenAI deployment
+
+**Plan 6.4 — Agent Adapter Layer** ✅
+- HermesAdapter: NousResearch Hermes
+- PiAdapter: Inflection AI Pi (compatible)
+- GeneralAgentAdapter: Fallback
 
 ### Success Criteria
-1. README.md is complete and accurate
-2. Docker Compose runs locally with no setup
-3. CI passes (lint + tests + typecheck)
-4. Contributor guide covers key conventions
-5. MIT license included
+1. All agent CRUD via REST API
+2. Chat messages persisted and retrieved
+3. WebSocket delivers real-time updates
+4. End-to-end flow from import to execution works
 
 ---
 
 ## Phase Summary Table
 
 | Phase | Focus | Plans | REQ-IDs | Success Criteria |
-|-------|-------|-------|---------|-----------------|
-| 1 | Domain Models | 5 | HIER-01–12, MEM-01, PERS-01–03 | 5 |
-| 2 | Structured Memory + Gates | 6 | GATE-01–08, MEM-02–06 | 6 |
-| 3 | Heartbeat Execution | 5 | BEAT-01–07 | 5 |
-| 4 | API Layer | 4 | API-01–05 | 5 |
-| 5 | Dashboard | 4 | DASH-01–04 | 5 |
-| 6 | Testing + Validation | 4 | All | 5 |
-| 7 | Polish + Documentation | 3 | All | 5 |
+|-------|-------|-------|---------|------------------|
+| 1 | Agent Registry | 4 | AGENT-01–07 | 4 |
+| 2 | Orchestration | 4 | ORCH-01–06 | 4 |
+| 3 | Chat UI | 4 | CHAT-01–06 | 4 |
+| 4 | Vector Memory | 4 | MEM-01–06 | 4 |
+| 5 | Dashboard | 4 | DASH-01–04 | 4 |
+| 6 | Integration | 4 | INT-01–04 | 4 |
 
-**Total:** 7 phases | 31 plans | 37 requirements | 36 success criteria
+**Total:** 6 phases | 24 plans | 27 requirements | 24 success criteria
 
 ---
 
-*Roadmap created: 2026-04-24*
+*Roadmap created: 2026-04-25 for v0.2*

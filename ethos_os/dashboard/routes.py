@@ -598,3 +598,236 @@ async def dashboard_search(request: Request) -> HTMLResponse:
 </body>
 </html>"""
     return HTMLResponse(content=html)
+
+
+@router.get("/budget", response_class=HTMLResponse)
+async def dashboard_budget(request: Request) -> HTMLResponse:
+    """Budget tracking view page (DASH-04)."""
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Budget Tracking - EthosOS</title>
+""" + DASHBOARD_CSS + """
+    <style>
+        .budget-bar { height: 24px; background: #e0e0e0; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+        .budget-bar-fill { height: 100%; background: #4caf50; transition: width 0.3s; }
+        .budget-bar-fill.warning { background: #ff9800; }
+        .budget-bar-fill.critical { background: #f44336; }
+        .budget-item { padding: 16px; background: #f8f8f8; border-radius: 8px; margin-bottom: 12px; }
+        .budget-item .name { font-weight: 600; }
+        .budget-item .amounts { display: flex; justify-content: space-between; font-size: 13px; color: #666; }
+        .pct { font-weight: 600; }
+        .pct.warning { color: #ff9800; }
+        .pct.critical { color: #f44336; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Budget Tracking</h1>
+            <div class="subtitle">Spend vs. budget per initiative</div>
+        </header>
+        
+        <nav>
+            <a href="/dashboard">Overview</a>
+            <a href="/dashboard/tree">Initiative Tree</a>
+            <a href="/dashboard/gates">Gate Status</a>
+            <a href="/dashboard/heartbeats">Heartbeats</a>
+            <a href="/dashboard/budget" class="active">Budget</a>
+            <a href="/dashboard/agents">Agents</a>
+            <a href="/dashboard/search">Search</a>
+        </nav>
+        
+        <div class="stats-grid" id="budget-stats">
+            <div class="loading">Loading...</div>
+        </div>
+        
+        <div class="panel">
+            <h2>Initiative Budgets</h2>
+            <div id="budget-list">
+                <div class="loading">Loading budget data...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '';
+        
+        async function loadBudget() {
+            try {
+                const resp = await fetch(API_BASE + '/api/dashboard/metrics');
+                const data = await resp.json();
+                
+                document.getElementById('budget-stats').innerHTML = `
+                    <div class="stat-card">
+                        <div class="value">$` + data.total_budget_allocated.toLocaleString() + `</div>
+                        <div class="label">Total Budget</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value">$` + data.total_spent.toLocaleString() + `</div>
+                        <div class="label">Total Spent</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value">` + data.pending_gates_count + `</div>
+                        <div class="label">Pending Gates</div>
+                    </div>`;
+                
+                const budgetList = document.getElementById('budget-list');
+                if (!data.budget_by_initiative || data.budget_by_initiative.length === 0) {
+                    budgetList.innerHTML = '<p>No budget data available.</p>';
+                    return;
+                }
+                
+                budgetList.innerHTML = data.budget_by_initiative.map(item => {
+                    const pct = item.pct_used || 0;
+                    let barClass = '';
+                    let pctClass = '';
+                    if (pct >= 90) { barClass = 'critical'; pctClass = 'critical'; }
+                    else if (pct >= 75) { barClass = 'warning'; pctClass = 'warning'; }
+                    
+                    return '<div class="budget-item">' +
+                        '<div class="name">' + item.item_name + ' (' + item.item_type + ')</div>' +
+                        '<div class="budget-bar">' +
+                            '<div class="budget-bar-fill ' + barClass + '" style="width:' + Math.min(pct, 100) + '%"></div>' +
+                        '</div>' +
+                        '<div class="amounts">' +
+                            '<span>$' + item.spent.toLocaleString() + ' spent</span>' +
+                            '<span class="pct ' + pctClass + '">' + Math.round(pct) + '%</span>' +
+                            '<span>$' + (item.budget_allocated || 0).toLocaleString() + ' budget</span>' +
+                        '</div>' +
+                    '</div>';
+                }).join('');
+            } catch (e) {
+                document.getElementById('budget-list').innerHTML = '<div class="error">Failed to load budget data</div>';
+            }
+        }
+        
+        loadBudget();
+    </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
+
+
+@router.get("/agents", response_class=HTMLResponse)
+async def dashboard_agents(request: Request) -> HTMLResponse:
+    """Agent status panel (DASH-01, DASH-02)."""
+    html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Status - EthosOS</title>
+""" + DASHBOARD_CSS + """
+    <style>
+        .agent-card { display: flex; align-items: center; padding: 16px; background: #f8f8f8; border-radius: 8px; margin-bottom: 12px; gap: 16px; }
+        .agent-icon { width: 48px; height: 48px; border-radius: 50%; background: #ddd; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .agent-info { flex: 1; }
+        .agent-name { font-weight: 600; font-size: 16px; }
+        .agent-task { color: #666; font-size: 13px; margin-top: 4px; }
+        .agent-status { padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+        .status-idle { background: #e0e0e0; color: #616161; }
+        .status-working { background: #e3f2fd; color: #1976d2; }
+        .status-blocked { background: #fff3e0; color: #f57c00; }
+        .status-complete { background: #e8f5e9; color: #388e3c; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Agent Status Panel</h1>
+            <div class="subtitle">DASH-01, DASH-02: Who is working, what are they doing</div>
+        </header>
+        
+        <nav>
+            <a href="/dashboard">Overview</a>
+            <a href="/dashboard/tree">Initiative Tree</a>
+            <a href="/dashboard/gates">Gate Status</a>
+            <a href="/dashboard/heartbeats">Heartbeats</a>
+            <a href="/dashboard/budget">Budget</a>
+            <a href="/dashboard/agents" class="active">Agents</a>
+            <a href="/dashboard/search">Search</a>
+        </nav>
+        
+        <div class="panel">
+            <h2>Active Agents</h2>
+            <div id="agent-list">
+                <div class="loading">Loading agents...</div>
+            </div>
+        </div>
+        
+        <div class="panel">
+            <h2>Performance Metrics (DASH-04)</h2>
+            <div id="performance">
+                <div class="loading">Loading performance data...</div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = '';
+        
+        async function loadAgents() {
+            try {
+                const resp = await fetch(API_BASE + '/api/dashboard/metrics');
+                const data = await resp.json();
+                
+                const container = document.getElementById('agent-list');
+                if (!data.agent_summary || data.agent_summary.length === 0) {
+                    container.innerHTML = '<p>No agents registered.</p>';
+                    return;
+                }
+                
+                container.innerHTML = data.agent_summary.map(agent => {
+                    let statusClass = 'status-' + agent.status;
+                    const taskText = agent.current_task_id ? 
+                        'Task: ' + agent.current_task_id.slice(0, 8) + '...' : 
+                        'No active task';
+                    
+                    return '<div class="agent-card">' +
+                        '<div class="agent-icon">🤖</div>' +
+                        '<div class="agent-info">' +
+                            '<div class="agent-name">' + agent.name + '</div>' +
+                            '<div class="agent-task">' + taskText + '</div>' +
+                        '</div>' +
+                        '<div class="agent-status ' + statusClass + '">' + agent.status + '</div>' +
+                    '</div>';
+                }).join('');
+            } catch (e) {
+                document.getElementById('agent-list').innerHTML = '<div class="error">Failed to load agents</div>';
+            }
+        }
+        
+        async function loadPerformance() {
+            try {
+                const resp = await fetch(API_BASE + '/api/dashboard/agent-performance');
+                const data = await resp.json();
+                
+                const container = document.getElementById('performance');
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<p>No performance data available.</p>';
+                    return;
+                }
+                
+                container.innerHTML = '<table><thead><tr><th>Agent</th><th>Status</th><th>Completed</th><th>Working</th><th>Total Cost</th></tr></thead><tbody>' +
+                    data.map(agent => '<tr>' +
+                        '<td>' + agent.agent_name + '</td>' +
+                        '<td><span class="agent-status status-' + agent.status + '">' + agent.status + '</span></td>' +
+                        '<td>' + agent.tasks_completed + '</td>' +
+                        '<td>' + agent.tasks_working + '</td>' +
+                        '<td>$' + agent.total_cost_usd.toFixed(2) + '</td>' +
+                    '</tr>').join('') +
+                    '</tbody></table>';
+            } catch (e) {
+                document.getElementById('performance').innerHTML = '<div class="error">Failed to load performance data</div>';
+            }
+        }
+        
+        loadAgents();
+        loadPerformance();
+    </script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)

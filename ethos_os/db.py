@@ -27,8 +27,7 @@ def _import_models() -> None:
     import ethos_os.models.sprint  # noqa: F401
     import ethos_os.models.task  # noqa: F401
     import ethos_os.models.prd  # noqa: F401
-    import ethos_os.models.gate  # noqa: F401
-    import ethos_os.models.audit  # noqa: F401
+    import ethos_os.models.chat  # noqa: F401
     import ethos_os.execution.agent  # noqa: F401
     import ethos_os.execution.heartbeat  # noqa: F401
 

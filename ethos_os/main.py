@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from ethos_os.api import api_router
 from ethos_os.config import get_settings
 from ethos_os.dashboard.routes import router as dashboard_router
+from ethos_os.dashboard.chat import router as chat_router
 
 settings = get_settings()
 
@@ -28,8 +29,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api_router)
+app.include_router(api_router, prefix="/api")
 app.include_router(dashboard_router)
+app.include_router(chat_router)
 
 
 @app.get("/health", tags=["health"])
